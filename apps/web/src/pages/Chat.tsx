@@ -564,26 +564,53 @@ export default function Chat() {
                   const isOwn = message.senderId === user?.id;
                   const decryptedContent =
                     decryptedMessages[message.id] || 'Decrypting...';
+                  const displayName = isOwn
+                    ? user?.username
+                    : activeChat?.username;
+                  const avatarInitial = displayName?.[0].toUpperCase() || '?';
 
                   return (
                     <div
                       key={message.id}
-                      className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                      className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
                     >
+                      {/* Profile Picture */}
                       <div
-                        className={`max-w-md px-4 py-3 rounded-2xl ${
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white flex-shrink-0 ${
                           isOwn
-                            ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                            : isDarkMode
-                              ? 'bg-white/10'
-                              : 'bg-black/5'
+                            ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                            : 'bg-gradient-to-br from-cyan-500 to-blue-600'
                         }`}
                       >
-                        <p className="text-sm break-words">
-                          {decryptedContent}
-                        </p>
-                        <p className="text-xs opacity-70 mt-1">
-                          {new Date(message.timestamp).toLocaleTimeString()}
+                        {avatarInitial}
+                      </div>
+
+                      {/* Message Bubble */}
+                      <div className="flex flex-col max-w-md">
+                        <div
+                          className={`px-4 py-3 rounded-2xl ${
+                            isOwn
+                              ? isDarkMode
+                                ? 'bg-slate-700/70 text-slate-100'
+                                : 'bg-slate-200 text-slate-900'
+                              : 'bg-indigo-600 text-white'
+                          }`}
+                        >
+                          <p className="text-sm break-words leading-relaxed">
+                            {decryptedContent}
+                          </p>
+                        </div>
+                        <p
+                          className={`text-xs mt-1 px-2 ${
+                            isOwn
+                              ? 'text-right text-slate-400'
+                              : 'text-left text-slate-400'
+                          }`}
+                        >
+                          {new Date(message.timestamp).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </p>
                       </div>
                     </div>
@@ -594,21 +621,26 @@ export default function Chat() {
             </div>
 
             {/* Message Input */}
-            <form
-              onSubmit={handleSendMessage}
-              className={`p-6 border-t ${
-                isDarkMode
-                  ? 'bg-slate-900/30 border-white/10'
-                  : 'bg-white/60 border-black/10'
-              } backdrop-blur-md`}
+            <div
+              className={`p-6 ${isDarkMode ? 'bg-slate-900/30' : 'bg-white/60'} backdrop-blur-md`}
             >
-              <div className="flex items-center gap-4">
+              <form
+                onSubmit={handleSendMessage}
+                className={`flex items-center gap-3 px-4 py-3 rounded-3xl ${
+                  isDarkMode ? 'bg-slate-800/90' : 'bg-slate-100'
+                }`}
+              >
+                {/* Emoji Button */}
                 <button
                   type="button"
-                  className="p-2.5 hover:bg-white/10 rounded-lg transition-colors opacity-60 hover:opacity-100"
+                  className={`p-2 rounded-lg transition-all ${
+                    isDarkMode
+                      ? 'hover:bg-slate-700/50 text-slate-400 hover:text-slate-300'
+                      : 'hover:bg-slate-200 text-slate-600 hover:text-slate-700'
+                  }`}
                 >
                   <svg
-                    className="w-6 h-6"
+                    className="w-5 h-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -621,23 +653,31 @@ export default function Chat() {
                     />
                   </svg>
                 </button>
+
+                {/* Message Input */}
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => handleTyping(e.target.value)}
-                  placeholder="Type a message"
-                  className={`flex-1 px-5 py-3.5 rounded-xl border-none transition-all outline-none ${
+                  placeholder="Your message..."
+                  className={`flex-1 bg-transparent border-none outline-none text-sm ${
                     isDarkMode
-                      ? 'bg-slate-800/80 text-white placeholder:text-white/30'
-                      : 'bg-black/5 text-slate-900 placeholder:text-black/40'
+                      ? 'text-white placeholder:text-slate-500'
+                      : 'text-slate-900 placeholder:text-slate-500'
                   }`}
                 />
+
+                {/* Attachment Button */}
                 <button
                   type="button"
-                  className="p-2.5 hover:bg-white/10 rounded-lg transition-colors opacity-60 hover:opacity-100"
+                  className={`p-2 rounded-lg transition-all ${
+                    isDarkMode
+                      ? 'hover:bg-slate-700/50 text-slate-400 hover:text-slate-300'
+                      : 'hover:bg-slate-200 text-slate-600 hover:text-slate-700'
+                  }`}
                 >
                   <svg
-                    className="w-6 h-6"
+                    className="w-5 h-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -646,13 +686,16 @@ export default function Chat() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
                 </button>
+
+                {/* Send Button */}
                 <button
                   type="submit"
-                  className="w-12 h-12 bg-gradient-to-br from-pink-500 to-rose-500 rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-pink-500/30"
+                  disabled={!newMessage.trim()}
+                  className="p-2.5 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center hover:scale-105 transition-all shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   <svg
                     className="w-5 h-5 text-white"
@@ -668,8 +711,8 @@ export default function Chat() {
                     />
                   </svg>
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">

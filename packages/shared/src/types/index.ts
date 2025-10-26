@@ -78,14 +78,16 @@ export interface MessageData {
   senderId: string;
   senderUsername: string;
   recipientId: string;
-  encryptedContent: string;
+  encryptedContentSender: string; // Encrypted with sender's public key
+  encryptedContentRecipient: string; // Encrypted with recipient's public key
   timestamp: string;
   isRead: boolean;
 }
 
 export interface SendMessageData {
   recipientId: string;
-  encryptedContent: string;
+  encryptedContentSender: string; // Encrypted with sender's public key
+  encryptedContentRecipient: string; // Encrypted with recipient's public key
 }
 
 export interface ConversationPreview {

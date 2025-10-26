@@ -25,13 +25,14 @@ model User {
 }
 
 model Message {
-  id               String   @id @default(uuid())
-  encryptedContent String
-  senderId         String
-  recipientId      String?
-  roomId           String?
-  isRead           Boolean  @default(false)
-  createdAt        DateTime @default(now())
+  id                        String   @id @default(uuid())
+  encryptedContentSender    String   // Encrypted with sender's public key (so sender can read)
+  encryptedContentRecipient String   // Encrypted with recipient's public key (so recipient can read)
+  senderId                  String
+  recipientId               String?
+  roomId                    String?
+  isRead                    Boolean  @default(false)
+  createdAt                 DateTime @default(now())
 
   sender    User      @relation("SentMessages", fields: [senderId], references: [id])
   recipient User?     @relation("ReceivedMessages", fields: [recipientId], references: [id])

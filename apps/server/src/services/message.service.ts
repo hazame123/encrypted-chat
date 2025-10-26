@@ -12,7 +12,8 @@ export class MessageService {
       data: {
         senderId,
         recipientId: data.recipientId,
-        encryptedContent: data.encryptedContent,
+        encryptedContentSender: data.encryptedContentSender,
+        encryptedContentRecipient: data.encryptedContentRecipient,
       },
       include: {
         sender: {
@@ -28,7 +29,8 @@ export class MessageService {
       senderId: message.senderId,
       senderUsername: message.sender.username,
       recipientId: message.recipientId!,
-      encryptedContent: message.encryptedContent,
+      encryptedContentSender: message.encryptedContentSender,
+      encryptedContentRecipient: message.encryptedContentRecipient,
       timestamp: message.createdAt.toISOString(),
       isRead: message.isRead,
     };
@@ -60,7 +62,8 @@ export class MessageService {
       senderId: msg.senderId,
       senderUsername: msg.sender.username,
       recipientId: msg.recipientId!,
-      encryptedContent: msg.encryptedContent,
+      encryptedContentSender: msg.encryptedContentSender,
+      encryptedContentRecipient: msg.encryptedContentRecipient,
       timestamp: msg.createdAt.toISOString(),
       isRead: msg.isRead,
     }));

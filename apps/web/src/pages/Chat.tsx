@@ -121,8 +121,10 @@ export default function Chat() {
   useEffect(() => {
     const privateKey = getPrivateKey();
 
-    if (!privateKey) {
-      console.error('No private key found. Please register a new account.');
+    if (!privateKey || !user) {
+      if (!privateKey) {
+        console.error('No private key found. Please register a new account.');
+      }
       return;
     }
 
@@ -132,8 +134,16 @@ export default function Chat() {
       for (const msg of currentMessages) {
         if (!decryptedMessages[msg.id]) {
           try {
+            // Use the correct encrypted content based on who sent the message
+            // If current user is the sender, use encryptedContentSender
+            // If current user is the recipient, use encryptedContentRecipient
+            const encryptedContent =
+              msg.senderId === user.id
+                ? msg.encryptedContentSender
+                : msg.encryptedContentRecipient;
+
             const decrypted = await decryptMessage(
-              msg.encryptedContent,
+              encryptedContent,
               privateKey
             );
             newDecrypted[msg.id] = decrypted;
@@ -160,23 +170,33 @@ export default function Chat() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !currentChatUserId || !activeChat) return;
+    if (!newMessage.trim() || !currentChatUserId || !activeChat || !user)
+      return;
 
     try {
-      // Get recipient's public key
+      // Get both recipient's and sender's public keys
       const response = await messagesAPI.getUserPublicKey(currentChatUserId);
       const recipientPublicKey = response.publicKey;
+      const senderPublicKey = user.publicKey;
 
-      // Encrypt message
-      const encryptedContent = await encryptMessage(
+      // Encrypt message twice:
+      // 1. With recipient's public key (so they can decrypt it)
+      const encryptedContentRecipient = await encryptMessage(
         newMessage,
         recipientPublicKey
+      );
+
+      // 2. With sender's own public key (so sender can decrypt their own sent messages)
+      const encryptedContentSender = await encryptMessage(
+        newMessage,
+        senderPublicKey
       );
 
       // Send via WebSocket
       socketService.sendMessage({
         recipientId: currentChatUserId,
-        encryptedContent,
+        encryptedContentSender,
+        encryptedContentRecipient,
       });
 
       setNewMessage('');

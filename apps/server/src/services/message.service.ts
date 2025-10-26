@@ -101,39 +101,39 @@ export class MessageService {
     >`
       SELECT DISTINCT
         CASE
-          WHEN m.sender_id = ${userId} THEN m.recipient_id
-          ELSE m.sender_id
+          WHEN m."senderId" = ${userId} THEN m."recipientId"
+          ELSE m."senderId"
         END as "userId",
         u.username,
         (
-          SELECT m2.encrypted_content
+          SELECT m2."encryptedContent"
           FROM messages m2
-          WHERE (m2.sender_id = ${userId} AND m2.recipient_id = u.id)
-             OR (m2.sender_id = u.id AND m2.recipient_id = ${userId})
-          ORDER BY m2.created_at DESC
+          WHERE (m2."senderId" = ${userId} AND m2."recipientId" = u.id)
+             OR (m2."senderId" = u.id AND m2."recipientId" = ${userId})
+          ORDER BY m2."createdAt" DESC
           LIMIT 1
         ) as "lastMessage",
         (
-          SELECT m2.created_at
+          SELECT m2."createdAt"
           FROM messages m2
-          WHERE (m2.sender_id = ${userId} AND m2.recipient_id = u.id)
-             OR (m2.sender_id = u.id AND m2.recipient_id = ${userId})
-          ORDER BY m2.created_at DESC
+          WHERE (m2."senderId" = ${userId} AND m2."recipientId" = u.id)
+             OR (m2."senderId" = u.id AND m2."recipientId" = ${userId})
+          ORDER BY m2."createdAt" DESC
           LIMIT 1
         ) as "lastMessageTime",
         (
           SELECT COUNT(*)
           FROM messages m3
-          WHERE m3.sender_id = u.id
-            AND m3.recipient_id = ${userId}
-            AND m3.is_read = false
+          WHERE m3."senderId" = u.id
+            AND m3."recipientId" = ${userId}
+            AND m3."isRead" = false
         ) as "unreadCount"
       FROM messages m
       JOIN users u ON u.id = CASE
-        WHEN m.sender_id = ${userId} THEN m.recipient_id
-        ELSE m.sender_id
+        WHEN m."senderId" = ${userId} THEN m."recipientId"
+        ELSE m."senderId"
       END
-      WHERE m.sender_id = ${userId} OR m.recipient_id = ${userId}
+      WHERE m."senderId" = ${userId} OR m."recipientId" = ${userId}
       ORDER BY "lastMessageTime" DESC
     `;
 

@@ -120,7 +120,11 @@ export default function Chat() {
   // Decrypt messages
   useEffect(() => {
     const privateKey = getPrivateKey();
-    if (!privateKey) return;
+
+    if (!privateKey) {
+      console.error('No private key found. Please register a new account.');
+      return;
+    }
 
     const decryptAllMessages = async () => {
       const newDecrypted: Record<string, string> = {};

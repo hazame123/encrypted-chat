@@ -6,7 +6,8 @@ import type {
   SendMessageData,
 } from '@encrypted-chat/shared';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
+// Hardcoded for now - Socket.IO needs HTTP URL, not WS URL
+const WS_URL = 'http://localhost:3000';
 
 class SocketService {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null =
@@ -35,8 +36,12 @@ class SocketService {
       console.log('✅ WebSocket connected');
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('❌ WebSocket disconnected');
+    this.socket.on('connect_error', (error) => {
+      console.error('❌ WebSocket connection error:', error.message);
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
     });
 
     this.socket.on('message', (data) => {

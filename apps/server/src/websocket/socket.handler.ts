@@ -1,4 +1,5 @@
 import type { Server } from 'socket.io';
+import type { FastifyInstance } from 'fastify';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -29,6 +30,7 @@ const messageService = new MessageService();
 const onlineUsers = new Map<string, Set<string>>();
 
 export function setupSocketHandlers(
+  fastify: FastifyInstance,
   io: Server<ClientToServerEvents, ServerToClientEvents>
 ) {
   io.use((socket: Partial<AuthenticatedSocket>, next) => {
@@ -40,23 +42,19 @@ export function setupSocketHandlers(
     }
 
     try {
-      // Verify JWT token - accessing fastify JWT through io.server
-      const server = (
-        io as unknown as {
-          server: {
-            jwt: {
-              verify: (token: string) => { userId: string; username: string };
-            };
-          };
-        }
-      ).server;
-      const decoded = server.jwt.verify(token);
+      // Verify JWT token using Fastify JWT plugin
+      const decoded = fastify.jwt.verify(token) as {
+        userId: string;
+        username: string;
+      };
+
       if (socket) {
         socket.userId = decoded.userId;
         socket.username = decoded.username;
       }
       next();
     } catch (err) {
+      console.error('WebSocket authentication failed:', err);
       next(new Error('Authentication error'));
     }
   });

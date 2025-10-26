@@ -50,7 +50,7 @@ await fastify.register(usersRoutes, { prefix: '/api/v1/users' });
 fastify.ready((err) => {
   if (err) throw err;
 
-  setupSocketHandlers(fastify.io as Server);
+  setupSocketHandlers(fastify, fastify.io as Server);
 });
 
 // Start server

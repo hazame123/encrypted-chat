@@ -6,6 +6,7 @@ import type { Server } from 'socket.io';
 import jwtPlugin from './plugins/jwt.plugin.js';
 import authRoutes from './routes/auth.routes.js';
 import messageRoutes from './routes/message.routes.js';
+import usersRoutes from './routes/users.routes.js';
 import { setupSocketHandlers } from './websocket/socket.handler.js';
 
 const fastify = Fastify({
@@ -43,6 +44,7 @@ fastify.get('/health', async () => {
 // Register routes
 await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 await fastify.register(messageRoutes, { prefix: '/api/v1/messages' });
+await fastify.register(usersRoutes, { prefix: '/api/v1/users' });
 
 // Setup WebSocket handlers after server is ready
 fastify.ready((err) => {

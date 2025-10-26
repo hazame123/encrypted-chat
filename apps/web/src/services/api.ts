@@ -137,6 +137,11 @@ export const messagesAPI = {
     const response = await api.get(`/api/v1/messages/unread/${userId}`);
     return response.data;
   },
+
+  getUserPublicKey: async (userId: string) => {
+    const response = await api.get(`/api/v1/users/${userId}/public-key`);
+    return response.data;
+  },
 };
 
 // Users API

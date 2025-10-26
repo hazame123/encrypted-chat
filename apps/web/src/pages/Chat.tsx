@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { useChatStore } from '../store/chatStore';
 import { authAPI, messagesAPI } from '../services/api';
 import {
   clearPrivateKey,
@@ -9,129 +10,168 @@ import {
   getPrivateKey,
 } from '../utils/crypto';
 import { socketService } from '../services/socket';
-import type { MessageData, ConversationPreview } from '@encrypted-chat/shared';
+import { UserSearch } from '../components/UserSearch';
 
 export default function Chat() {
   const navigate = useNavigate();
   const { user, clearAuth, accessToken } = useAuthStore();
+  const {
+    conversations,
+    messages,
+    currentChatUserId,
+    typingUsers,
+    setConversations,
+    setMessages,
+    setCurrentChatUserId,
+    addMessage,
+    setUserOnline,
+    setUserOffline,
+    setUserTyping,
+  } = useChatStore();
+
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [conversations, setConversations] = useState<ConversationPreview[]>([]);
-  const [activeChat, setActiveChat] = useState<ConversationPreview | null>(
-    null
-  );
-  const [messages, setMessages] = useState<MessageData[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [showUserSearch, setShowUserSearch] = useState(false);
+  const [decryptedMessages, setDecryptedMessages] = useState<
+    Record<string, string>
+  >({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Connect to WebSocket on mount
+  const activeChat = conversations.find((c) => c.userId === currentChatUserId);
+  const currentMessages = useMemo(
+    () => (currentChatUserId ? messages[currentChatUserId] || [] : []),
+    [currentChatUserId, messages]
+  );
+  const isOtherUserTyping = currentChatUserId
+    ? typingUsers[currentChatUserId]
+    : false;
+
+  // Initialize WebSocket and load conversations
   useEffect(() => {
-    if (accessToken) {
-      socketService.connect(accessToken);
+    if (!accessToken) return;
 
-      // Set up message handler
-      const unsubscribeMessage = socketService.onMessage(async (message) => {
-        // Decrypt message
-        const privateKey = getPrivateKey();
-        if (privateKey) {
-          const decryptedContent = await decryptMessage(
-            message.encryptedContent,
-            privateKey
-          );
-          setMessages((prev) => [
-            ...prev,
-            { ...message, encryptedContent: decryptedContent },
-          ]);
-        }
-      });
+    // Connect WebSocket
+    socketService.connect(accessToken);
 
-      // Set up typing handler
-      const unsubscribeTyping = socketService.onTyping((data) => {
-        if (data.isTyping) {
-          setTypingUsers((prev) => new Set(prev).add(data.userId));
-        } else {
-          setTypingUsers((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(data.userId);
-            return newSet;
-          });
-        }
-      });
-
-      return () => {
-        unsubscribeMessage();
-        unsubscribeTyping();
-        socketService.disconnect();
-      };
-    }
-  }, [accessToken]);
-
-  // Load conversations
-  useEffect(() => {
+    // Load conversations
     const loadConversations = async () => {
       try {
-        const { conversations: convos } = await messagesAPI.getConversations();
-        setConversations(convos);
+        const response = await messagesAPI.getConversations();
+        setConversations(response.conversations);
       } catch (error) {
         console.error('Failed to load conversations:', error);
       }
     };
 
     loadConversations();
-  }, []);
+
+    // Setup WebSocket event handlers
+    const unsubscribeMessage = socketService.onMessage((message) => {
+      addMessage(message);
+    });
+
+    const unsubscribeTyping = socketService.onTyping((data) => {
+      setUserTyping(data.userId, data.isTyping);
+    });
+
+    const unsubscribeOnline = socketService.onUserOnline((data) => {
+      setUserOnline(data.userId);
+    });
+
+    const unsubscribeOffline = socketService.onUserOffline((data) => {
+      setUserOffline(data.userId);
+    });
+
+    // Cleanup
+    return () => {
+      unsubscribeMessage();
+      unsubscribeTyping();
+      unsubscribeOnline();
+      unsubscribeOffline();
+      socketService.disconnect();
+    };
+  }, [
+    accessToken,
+    addMessage,
+    setConversations,
+    setUserOffline,
+    setUserOnline,
+    setUserTyping,
+  ]);
 
   // Load messages when active chat changes
   useEffect(() => {
     const loadMessages = async () => {
-      if (!activeChat) return;
+      if (!currentChatUserId) return;
 
       try {
-        const { messages: msgs } = await messagesAPI.getConversation(
-          activeChat.userId
-        );
-
-        // Decrypt all messages
-        const privateKey = getPrivateKey();
-        if (privateKey) {
-          const decryptedMsgs = await Promise.all(
-            msgs.map(async (msg: MessageData) => ({
-              ...msg,
-              encryptedContent: await decryptMessage(
-                msg.encryptedContent,
-                privateKey
-              ),
-            }))
-          );
-          setMessages(decryptedMsgs);
-        }
+        const response = await messagesAPI.getConversation(currentChatUserId);
+        setMessages(currentChatUserId, response.messages);
       } catch (error) {
         console.error('Failed to load messages:', error);
       }
     };
 
     loadMessages();
-  }, [activeChat]);
+  }, [currentChatUserId, setMessages]);
+
+  // Decrypt messages
+  useEffect(() => {
+    const privateKey = getPrivateKey();
+    if (!privateKey) return;
+
+    const decryptAllMessages = async () => {
+      const newDecrypted: Record<string, string> = {};
+
+      for (const msg of currentMessages) {
+        if (!decryptedMessages[msg.id]) {
+          try {
+            const decrypted = await decryptMessage(
+              msg.encryptedContent,
+              privateKey
+            );
+            newDecrypted[msg.id] = decrypted;
+          } catch (error) {
+            console.error('Failed to decrypt message:', error);
+            newDecrypted[msg.id] = '[Unable to decrypt]';
+          }
+        }
+      }
+
+      if (Object.keys(newDecrypted).length > 0) {
+        setDecryptedMessages((prev) => ({ ...prev, ...newDecrypted }));
+      }
+    };
+
+    decryptAllMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMessages]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [currentMessages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !activeChat) return;
+    if (!newMessage.trim() || !currentChatUserId || !activeChat) return;
 
     try {
-      // Encrypt message with recipient's public key
+      // Get recipient's public key
+      const response = await messagesAPI.getUserPublicKey(currentChatUserId);
+      const recipientPublicKey = response.publicKey;
+
+      // Encrypt message
       const encryptedContent = await encryptMessage(
         newMessage,
-        activeChat.userId
+        recipientPublicKey
       );
 
       // Send via WebSocket
       socketService.sendMessage({
-        recipientId: activeChat.userId,
+        recipientId: currentChatUserId,
         encryptedContent,
       });
 
@@ -145,12 +185,28 @@ export default function Chat() {
   const handleTyping = (value: string) => {
     setNewMessage(value);
 
-    if (activeChat && !isTyping && value.length > 0) {
-      setIsTyping(true);
-      socketService.sendTyping(activeChat.userId, true);
-    } else if (isTyping && value.length === 0) {
+    if (!currentChatUserId) return;
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Send typing indicator
+    if (value.length > 0) {
+      if (!isTyping) {
+        setIsTyping(true);
+        socketService.sendTyping(currentChatUserId, true);
+      }
+
+      // Stop typing after 2 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false);
+        socketService.sendTyping(currentChatUserId, false);
+      }, 2000);
+    } else {
       setIsTyping(false);
-      socketService.sendTyping(activeChat.userId, false);
+      socketService.sendTyping(currentChatUserId, false);
     }
   };
 
@@ -160,6 +216,7 @@ export default function Chat() {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      socketService.disconnect();
       clearPrivateKey();
       clearAuth();
       navigate('/login');
@@ -194,7 +251,11 @@ export default function Chat() {
               <h2 className="font-semibold">{user?.username}</h2>
               <p className="text-xs opacity-70">UI/UX Designer</p>
             </div>
-            <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+            <button
+              onClick={() => setShowUserSearch(true)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              title="New conversation"
+            >
               <svg
                 className="w-5 h-5"
                 fill="none"
@@ -205,7 +266,7 @@ export default function Chat() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                  d="M12 4v16m8-8H4"
                 />
               </svg>
             </button>
@@ -240,40 +301,64 @@ export default function Chat() {
 
         {/* Conversations List */}
         <div className="flex-1 overflow-y-auto">
-          {conversations.map((conv) => (
-            <button
-              key={conv.userId}
-              onClick={() => setActiveChat(conv)}
-              className={`w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-colors border-b border-white/5 ${
-                activeChat?.userId === conv.userId ? 'bg-white/10' : ''
-              }`}
-            >
-              <div className="relative">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-medium">
-                  {conv.username[0].toUpperCase()}
+          {conversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+              <div className="text-6xl mb-4">💬</div>
+              <h3
+                className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}
+              >
+                No conversations yet
+              </h3>
+              <p
+                className={`text-sm mb-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}
+              >
+                Start a new conversation
+              </p>
+              <button
+                onClick={() => setShowUserSearch(true)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                New Conversation
+              </button>
+            </div>
+          ) : (
+            conversations.map((conv) => (
+              <button
+                key={conv.userId}
+                onClick={() => setCurrentChatUserId(conv.userId)}
+                className={`w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-colors border-b border-white/5 ${
+                  currentChatUserId === conv.userId ? 'bg-white/10' : ''
+                }`}
+              >
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-medium">
+                    {conv.username[0].toUpperCase()}
+                  </div>
+                  {conv.isOnline && (
+                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full" />
+                  )}
                 </div>
-                {conv.isOnline && (
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full" />
+                <div className="flex-1 text-left">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-sm">
+                      {conv.username}
+                    </span>
+                    <span className="text-xs opacity-60">
+                      {conv.lastMessageTime || '9:52'}
+                    </span>
+                  </div>
+                  <p className="text-xs opacity-70 truncate">
+                    {conv.lastMessage || 'Start chatting...'}
+                  </p>
+                </div>
+                {conv.unreadCount > 0 && (
+                  <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">
+                    {conv.unreadCount}
+                  </div>
                 )}
-              </div>
-              <div className="flex-1 text-left">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-sm">{conv.username}</span>
-                  <span className="text-xs opacity-60">
-                    {conv.lastMessageTime || '9:52'}
-                  </span>
-                </div>
-                <p className="text-xs opacity-70 truncate">
-                  {conv.lastMessage || 'Start chatting...'}
-                </p>
-              </div>
-              {conv.unreadCount > 0 && (
-                <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">
-                  {conv.unreadCount}
-                </div>
-              )}
-            </button>
-          ))}
+              </button>
+            ))
+          )}
         </div>
 
         {/* Bottom Actions */}
@@ -362,14 +447,20 @@ export default function Chat() {
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-medium relative">
                   {activeChat.username[0].toUpperCase()}
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full" />
+                  {activeChat.isOnline && (
+                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full" />
+                  )}
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">
                     {activeChat.username}
                   </h3>
                   <p className="text-xs opacity-60">
-                    {typingUsers.size > 0 ? 'typing...' : 'Active Now'}
+                    {isOtherUserTyping
+                      ? 'typing...'
+                      : activeChat.isOnline
+                        ? 'Active Now'
+                        : 'Offline'}
                   </p>
                 </div>
               </div>
@@ -433,30 +524,48 @@ export default function Chat() {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message) => {
-                const isOwn = message.senderId === user?.id;
-                return (
+              {currentMessages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
                   <div
-                    key={message.id}
-                    className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                    className={`text-center ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}
                   >
-                    <div
-                      className={`max-w-md px-4 py-3 rounded-2xl ${
-                        isOwn
-                          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                          : isDarkMode
-                            ? 'bg-white/10'
-                            : 'bg-black/5'
-                      }`}
-                    >
-                      <p className="text-sm">{message.encryptedContent}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
+                    <p>No messages yet</p>
+                    <p className="text-sm">
+                      Send a message to start the conversation
+                    </p>
                   </div>
-                );
-              })}
+                </div>
+              ) : (
+                currentMessages.map((message) => {
+                  const isOwn = message.senderId === user?.id;
+                  const decryptedContent =
+                    decryptedMessages[message.id] || 'Decrypting...';
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-md px-4 py-3 rounded-2xl ${
+                          isOwn
+                            ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                            : isDarkMode
+                              ? 'bg-white/10'
+                              : 'bg-black/5'
+                        }`}
+                      >
+                        <p className="text-sm break-words">
+                          {decryptedContent}
+                        </p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {new Date(message.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
               <div ref={messagesEndRef} />
             </div>
 
@@ -552,6 +661,14 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {/* User Search Modal */}
+      {showUserSearch && (
+        <UserSearch
+          onClose={() => setShowUserSearch(false)}
+          isDarkMode={isDarkMode}
+        />
+      )}
     </div>
   );
 }

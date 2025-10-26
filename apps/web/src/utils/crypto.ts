@@ -64,3 +64,71 @@ export function getPrivateKey(): string | null {
 export function clearPrivateKey(): void {
   localStorage.removeItem('privateKey');
 }
+
+// Encrypt message with recipient's public key
+export async function encryptMessage(
+  message: string,
+  recipientPublicKey: string
+): Promise<string> {
+  try {
+    const publicKeyBuffer = base64ToArrayBuffer(recipientPublicKey);
+    const publicKey = await window.crypto.subtle.importKey(
+      'spki',
+      publicKeyBuffer,
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-256',
+      },
+      false,
+      ['encrypt']
+    );
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(message);
+
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: 'RSA-OAEP' },
+      publicKey,
+      data
+    );
+
+    return arrayBufferToBase64(encrypted);
+  } catch (error) {
+    console.error('Encryption error:', error);
+    throw new Error('Failed to encrypt message');
+  }
+}
+
+// Decrypt message with own private key
+export async function decryptMessage(
+  encryptedMessage: string,
+  privateKeyString: string
+): Promise<string> {
+  try {
+    const privateKeyBuffer = base64ToArrayBuffer(privateKeyString);
+    const privateKey = await window.crypto.subtle.importKey(
+      'pkcs8',
+      privateKeyBuffer,
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-256',
+      },
+      false,
+      ['decrypt']
+    );
+
+    const encryptedBuffer = base64ToArrayBuffer(encryptedMessage);
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: 'RSA-OAEP' },
+      privateKey,
+      encryptedBuffer
+    );
+
+    const decoder = new TextDecoder();
+    return decoder.decode(decrypted);
+  } catch (error) {
+    console.error('Decryption error:', error);
+    return '[Unable to decrypt message]';
+  }
+}

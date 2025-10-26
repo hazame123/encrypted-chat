@@ -119,4 +119,34 @@ export const authAPI = {
   },
 };
 
+// Messages API
+export const messagesAPI = {
+  getConversation: async (userId: string, limit = 50) => {
+    const response = await api.get(`/api/v1/messages/conversation/${userId}`, {
+      params: { limit },
+    });
+    return response.data;
+  },
+
+  getConversations: async () => {
+    const response = await api.get('/api/v1/messages/conversations');
+    return response.data;
+  },
+
+  getUnreadCount: async (userId: string) => {
+    const response = await api.get(`/api/v1/messages/unread/${userId}`);
+    return response.data;
+  },
+};
+
+// Users API
+export const usersAPI = {
+  searchUsers: async (query: string) => {
+    const response = await api.get('/api/v1/users/search', {
+      params: { q: query },
+    });
+    return response.data;
+  },
+};
+
 export default api;

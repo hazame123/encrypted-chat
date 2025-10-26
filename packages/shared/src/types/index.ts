@@ -50,3 +50,49 @@ export interface TokenPayload {
   email: string;
   username: string;
 }
+
+// WebSocket Events
+export interface ServerToClientEvents {
+  message: (data: MessageData) => void;
+  userOnline: (data: { userId: string; username: string }) => void;
+  userOffline: (data: { userId: string }) => void;
+  typing: (data: {
+    userId: string;
+    username: string;
+    isTyping: boolean;
+  }) => void;
+  messageRead: (data: { messageId: string; userId: string }) => void;
+  error: (data: { message: string }) => void;
+}
+
+export interface ClientToServerEvents {
+  sendMessage: (data: SendMessageData) => void;
+  typing: (data: { recipientId: string; isTyping: boolean }) => void;
+  markAsRead: (data: { messageId: string }) => void;
+  joinRoom: (data: { roomId: string }) => void;
+  leaveRoom: (data: { roomId: string }) => void;
+}
+
+export interface MessageData {
+  id: string;
+  senderId: string;
+  senderUsername: string;
+  recipientId: string;
+  encryptedContent: string;
+  timestamp: string;
+  isRead: boolean;
+}
+
+export interface SendMessageData {
+  recipientId: string;
+  encryptedContent: string;
+}
+
+export interface ConversationPreview {
+  userId: string;
+  username: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unreadCount: number;
+  isOnline: boolean;
+}

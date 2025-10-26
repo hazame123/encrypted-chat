@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  username  String   @unique
-  email     String   @unique
-  password  String
-  publicKey String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  username     String   @unique
+  email        String   @unique
+  password     String   // Hashed with Argon2
+  publicKey    String
+  refreshToken String?  // Store hashed refresh token
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
+  sentMessages     Message[]    @relation("SentMessages")
+  receivedMessages Message[]    @relation("ReceivedMessages")
   roomMemberships  RoomMember[]
 
   @@map("users")

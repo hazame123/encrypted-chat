@@ -21,3 +21,32 @@ export interface ChatRoom {
   members: string[];
   createdAt: Date;
 }
+
+// Auth Types
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+  publicKey: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface TokenPayload {
+  userId: string;
+  email: string;
+  username: string;
+}

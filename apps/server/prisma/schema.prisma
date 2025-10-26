@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  publicKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  roomMemberships  RoomMember[]
+
+  @@map("users")
+}
+
+model Message {
+  id               String   @id @default(uuid())
+  encryptedContent String
+  senderId         String
+  recipientId      String?
+  roomId           String?
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  sender    User      @relation("SentMessages", fields: [senderId], references: [id])
+  recipient User?     @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  room      ChatRoom? @relation(fields: [roomId], references: [id])
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([roomId])
+  @@map("messages")
+}
+
+model ChatRoom {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+  members  RoomMember[]
+
+  @@map("chat_rooms")
+}
+
+model RoomMember {
+  id        String   @id @default(uuid())
+  userId    String
+  roomId    String
+  joinedAt  DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id])
+  room ChatRoom @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId])
+  @@map("room_members")
+}
